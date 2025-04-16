@@ -37,7 +37,7 @@ g_values = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 M = sp.Symbol('M')
 
 
-def calculate_probs_and_entropy(n):
+def calculate_probs_and_entropy(n, p_random=None):
     # step 1: Define symbols
     # suppose we are working with discrete distribution over n outcomes, for example n = 10, ie. p1, p2, p3, ..., p10
 
@@ -49,13 +49,15 @@ def calculate_probs_and_entropy(n):
     p = sp.symbols(f'p1:{n+1}')
 
     # step 2: generate random probabilities that sum to 1
-    rand_vals = np.random.rand(n)
-    rand_probs = rand_vals / rand_vals.sum()
+    if p_random is None:
+        rand_vals = np.random.rand(n)
+        rand_probs = rand_vals / rand_vals.sum()
+    else:
+        rand_probs = p_random
+
 
     # step 3: Map to dictionary for substition
     p_values = {p[i] : rand_probs[i] for i in range(n)}
-
-
     probs = np.array([p_values[sym] for sym in p])
     entropy_val = entropy(probs)
 
@@ -63,40 +65,32 @@ def calculate_probs_and_entropy(n):
 
 
 
+# Create random distribution once
+rand_vals = np.random.rand(10)
+p_random = rand_vals / np.sum(rand_vals)
 
-p, p_values, ent = calculate_probs_and_entropy(10)
+
+p, p_values, entropy_val = calculate_probs_and_entropy(10,p_random=p_random)
 
 # Pretty print the probabilities
-print("📊 Generated Probabilities:")
+print("📊 Random Distribution:")
 for sym in p:
     print(f"  {str(sym)} = {p_values[sym]:.4f}")
-
-# Print the entropy
-print("\n🧠 Entropy of the distribution:")
-print(f"  H(p) = {ent:.4f}")
+print(f"\n🧠 Entropy: {entropy_val:.4f}")
 
 
-def lagrangian(n, x, lambda_, theta, M = 1):
-    _, p_vals_dict, entropy_val = calculate_probs_and_entropy(n)
 
-    #convert dict to array in order of p1, p2, ..., pn
-    probs = np.array([p_vals_dict[sp.Symbol(f'p{i+1}')] for i in range(n)])
-
+def lagrangian(n, x, lambda_, theta, M, p_random):
+    probs = np.array(p_random)
+    entropy_val = -np.sum(probs * np.log(probs))
     normalization_eq = -lambda_ * (np.sum(probs)-1)
     moment_eq = theta * (np.sum(probs * x) - M)
-
-    
     return entropy_val + normalization_eq + moment_eq
 
+L_val = lagrangian(10, np.arange(1, 11), 0.5, 0.1, 5.5, p_random)
+print(f"\n📐 Lagrangian (using same random p): {L_val:.4f}")
 
-n = 10
-x = np.arange(1, n+1)  # [1, 2, ..., 10]
-lambda_ = 0.5
-theta = 0.1
-M = 5.5  # example expected value
 
-L_val = lagrangian(n, x, lambda_, theta, M)
-print(f"Lagrangian value: {L_val:.4f}")
 
 
 # The Lagrangian value computed above is not the optimal solution.
