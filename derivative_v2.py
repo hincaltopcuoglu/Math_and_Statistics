@@ -3,6 +3,7 @@ import re
 import math
 from tabulate import tabulate
 import operator
+from itertools import combinations_with_replacement
 
 class DerivativeVisitor(ast.NodeVisitor):
 
@@ -516,7 +517,6 @@ class DerivativeVisitor(ast.NodeVisitor):
     @staticmethod
     def simplify_hessian_expression(expr: str) -> str:
     
-
         # First basic regex cleanup (keep your existing ones if needed)
         expr = expr.strip()
 
@@ -626,6 +626,50 @@ class DerivativeVisitor(ast.NodeVisitor):
 
         print(f"🔄 Laplacian (∇²f): {total}")
 
+
+    def evaluate_taylor_expansion(self, context, order=2):
+        print("\n📐 Taylor Series Expansion:")
+
+        variables = self.args
+        expansion_point = context
+        f0 = eval(self.body, {**math.__dict__}, expansion_point)
+
+        print(f"f({expansion_point}) = {f0}")
+        terms = [str(f0)]
+
+        for n in range(1, order + 1):
+            for var_combo in combinations_with_replacement(variables, n):
+                term_expr = self.body
+
+                for var in var_combo:
+                    d = DerivativeVisitor(f"f({', '.join(variables)}) = {term_expr}", var)
+                    d.visit(d.tree)
+                    partial_terms = [t for t in d.terms if t != "0"]
+                    term_expr = " + ".join(partial_terms) if partial_terms else "0"
+
+                try:
+                    safe_globals = {name: getattr(math, name) for name in dir(math) if not name.startswith("__")}
+                    deriv_val = eval(term_expr, safe_globals, expansion_point)
+                except Exception as e:
+                    deriv_val = f"❌ ({e})"
+
+                if isinstance(deriv_val, (int, float)) and abs(deriv_val) > 1e-12:
+                    pieces = []
+                    for var in variables:
+                        exp = var_combo.count(var)
+                        if exp > 0:
+                            pieces.append(f"({var} - {expansion_point[var]})**{exp}" if exp > 1 else f"({var} - {expansion_point[var]})")
+                    poly = " * ".join(pieces)
+                    if poly:
+                        term_str = f"{deriv_val} * {poly}" if abs(deriv_val) != 1 else poly
+                    else:
+                        term_str = f"{deriv_val}"
+                    if n > 1:
+                        term_str += f" / {math.factorial(n)}"
+                    terms.append(term_str)
+
+        print("\n📦 Taylor Expansion (up to order", order, "):")
+        print("  ", " + ".join(terms))
     
 
 
@@ -687,7 +731,7 @@ def evaluate_symbolic_derivative():
         
 if __name__ == "__main__":
     print("📌 Choose what you want to calculate:")
-    print("1. Derivative / Gradient / Hessian / Limit Comparisons / Laplace")
+    print("1. Derivative / Gradient / Hessian / Limit Comparisons / Laplace / Taylor Series")
     print("2. Jacobian Matrix")
 
     choice = input("Enter 1 or 2: ").strip()
@@ -707,8 +751,9 @@ if __name__ == "__main__":
                 print("3. Compare Gradient with Numerical Derivatives")
                 print("4. Compute Hessian Matrix")
                 print("5. Compute Laplacian")
-                print("6. Exit")
-                sub_choice = input("Your choice (1-6): ").strip()
+                print("6. Taylor Series")
+                print("7. Exit")
+                sub_choice = input("Your choice (1-7): ").strip()
 
                 if sub_choice == "1":
                     visitor.evaluate_both_differences(symbolic_val, diff_var, context, deltas)
@@ -721,6 +766,8 @@ if __name__ == "__main__":
                 elif sub_choice == "5":
                     visitor.evaluate_laplacian(context)
                 elif sub_choice == "6":
+                    visitor.evaluate_taylor_expansion(context,order=2)
+                elif sub_choice == "7":
                     break
                 else:
                     print("⚠️ Invalid selection.")
