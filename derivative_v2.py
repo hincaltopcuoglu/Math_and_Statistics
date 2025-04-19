@@ -313,6 +313,32 @@ class DerivativeVisitor(ast.NodeVisitor):
                 print(f"{delta:10.6f} | ❌ Error: {e}")
 
 
+    def evaluate_central_difference(self, var, context, deltas):
+    
+        safe_globals = {name: getattr(math, name) for name in dir(math) if not name.startswith("__")}
+
+        print("\n📐 Central Difference Approximation of Derivative:")
+        print(f"Variable: {var}, Point: {context[var]}")
+        print(f"{'Δ':>10} | {'(f(x+Δ) - f(x-Δ)) / 2Δ':>30}")
+        print("-" * 45)
+
+        for delta in sorted(deltas, reverse=True):
+            try:
+                ctx_plus = context.copy()
+                ctx_minus = context.copy()
+
+                ctx_plus[var] += delta
+                ctx_minus[var] -= delta
+
+                f_plus = eval(self.body, safe_globals, ctx_plus)
+                f_minus = eval(self.body, safe_globals, ctx_minus)
+
+                approx = (f_plus - f_minus) / (2 * delta)
+                print(f"{delta:10.6f} | {approx:30.10f}")
+            except Exception as e:
+                print(f"{delta:10.6f} | ❌ Error: {e}")
+
+
 
 
     
@@ -385,8 +411,12 @@ if __name__ == "__main__":
     if expr_str and is_domain_safe:
         deltas = [0.03, 0.02, 0.01, 0.005, 0.0001]
         visitor = DerivativeVisitor(expr_str, diff_var)
+        # forward difference
         visitor.evaluate_limit_theorem(symbolic_expr, diff_var, context, deltas)
 
+        # central difference
+        visitor.evaluate_central_difference(diff_var, context, deltas)
+        
     elif expr_str:
         print("⛔ Skipping limit-based approximation due to domain issues.")
     
