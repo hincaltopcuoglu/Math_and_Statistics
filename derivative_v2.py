@@ -1,6 +1,6 @@
 import ast
 import re
-
+import math
 
 class DerivativeVisitor(ast.NodeVisitor):
 
@@ -200,41 +200,198 @@ class DerivativeVisitor(ast.NodeVisitor):
             return
 
         outer_raw = rules[func_name](g_expr)
-        outer = self.pretty(outer_raw)
-        g_prime_pretty = self.pretty(g_prime)
+        g_prime_raw = g_prime
+        #outer = self.pretty(outer_raw)
+        #g_prime_pretty = self.pretty(g_prime)
 
         # Apply chain rule: f'(g(x)) * g'(x)
         if g_prime == "1":
-            self.terms.append(outer)
+            self.terms.append(outer_raw)
         elif g_prime == "0":
             self.terms.append("0")
         else:
-            self.terms.append(f"{outer}*({g_prime_pretty})")
+            self.terms.append(f"{outer_raw}*({g_prime_raw})")
 
+    def validate_domain(self, context):
+
+        safe_globals = {name: getattr(math, name) for name in dir(math) if not name.startswith("__")}
+        has_issue = False
+
+        class DomainValidator(ast.NodeVisitor):
+            def visit_Call(self, node):
+                nonlocal has_issue
+                func_name = node.func.id if isinstance(node.func, ast.Name) else None
+                if func_name in ("log", "sqrt"):
+                    expr_str = ast.unparse(node.args[0])
+                    try:
+                        value = eval(expr_str, safe_globals, context)
+                        if func_name == "log" and value <= 0:
+                            print(f"⚠️ log({expr_str}) = {value:.4f} → undefined (≤ 0)")
+                            has_issue = True
+                        elif func_name == "sqrt" and value < 0:
+                            print(f"⚠️ sqrt({expr_str}) = {value:.4f} → undefined (< 0)")
+                            has_issue = True
+                    except Exception as e:
+                        print(f"⚠️ Could not evaluate {func_name}({expr_str}): {e}")
+                        has_issue = True
+                self.generic_visit(node)
+
+            def visit_BinOp(self, node):
+                nonlocal has_issue
+                if isinstance(node.op, ast.Div):
+                    denom_str = ast.unparse(node.right)
+                    try:
+                        denom_val = eval(denom_str, safe_globals, context)
+                        if denom_val == 0:
+                            print(f"⚠️ Division by zero: denominator {denom_str} = 0")
+                            has_issue = True
+                    except Exception as e:
+                        print(f"⚠️ Could not evaluate denominator {denom_str}: {e}")
+                        has_issue = True
+                self.generic_visit(node)
+
+        DomainValidator().visit(self.tree)
+        return not has_issue
+
+
+
+    def evaluate_limit_theorem(self, symbolic_expr, var, context, deltas):
+
+        safe_globals = {name: getattr(math, name) for name in dir(math) if not name.startswith("__")}
+
+        print("\n📐 Limit-based Approximation of Derivative:")
+        print(f"Variable: {var}, Point: {context[var]}")
+
+        print(f"Symbolic derivative at {var} = {context[var]}: ", end="")
+
+        # Evaluate symbolic derivative
+        try:
+            
+            symbolic_value = eval(symbolic_expr, safe_globals, context)
+            print(f"{symbolic_value:.10f}\n")
+        except Exception as e:
+            print(f"❌ Error evaluating symbolic expression: {e}")
+            return
+
+        # Sort deltas
+        deltas = sorted(deltas, reverse=True)
+
+        print(f"{'Δ':>10} | {'(f(x+Δ) - f(x))/Δ':>25}")
+        print("-" * 40)
+
+        for delta in deltas:
+            try:
+                # Copy the context
+                ctx_plus = context.copy()
+                ctx_base = context.copy()
+
+                # Only modify the variable we're differentiating with respect to
+                ctx_plus[var] += delta
+
+                # Try evaluating f(x + δ) and f(x)
+                debug_expr = f"sin({ctx_plus[var]} ** 2 + 1)"
+                debug_val = eval(debug_expr, safe_globals, ctx_plus)
+                #print(f"Δ = {delta}, sin(...) = {debug_val}")
+                
+                f_plus = eval(self.body, safe_globals, ctx_plus)
+                f_base = eval(self.body, safe_globals, ctx_base)
+
+                # Ensure they are numbers
+                if not isinstance(f_plus, (int, float)) or not isinstance(f_base, (int, float)):
+                    raise ValueError("Non-numeric result")
+
+                # Check for NaN or domain-sensitive outputs
+                if math.isnan(f_plus) or math.isnan(f_base):
+                    raise ValueError("Result is NaN")
+                if math.isinf(f_plus) or math.isinf(f_base):
+                    raise ValueError("Result is infinite")
+
+                approx = (f_plus - f_base) / delta
+                print(f"{delta:10.6f} | {approx:25.10f}")
+
+            except Exception as e:
+                print(f"{delta:10.6f} | ❌ Error: {e}")
+
+
+
+
+    
+def evaluate_symbolic_derivative():
+    # Step 1: get user inputs
+    expr_str = input("Enter a function: ")  # e.g., f(x, y) = x*y + log(x + y**2)
+    diff_var = input("Differentiate with respect to: ")  # e.g., x
+
+    # Step 2: Ask for evaluation point
+    raw_input = input("Enter values for variables (e.g. x=2, y=3): ")
+    #context = dict(eval(item.strip()) for item in raw_input.split(","))  # {'x': 2, 'y': 3}
+
+    context = {}
+    for item in raw_input.split(","):
+        key, value = item.strip().split("=")
+        context[key.strip()] = eval(value.strip())
+
+
+    # Step 3: Symbolic differentiation
+    #visitor = DerivativeVisitor(expr_str, diff_var)
+
+    # Try to detect missing function header
+    if "=" in expr_str:
+        visitor = DerivativeVisitor(expr_str, diff_var)
+        parsed_expr = visitor.body
+    else:
+        # 🧠 Automatically extract variable names
+        vars_found = sorted(set(re.findall(r'\b[a-zA-Z]\w*\b', expr_str)))
+        arglist = ", ".join(vars_found)
+        full_func = f"f({arglist}) = {expr_str}"
+        visitor = DerivativeVisitor(full_func, diff_var)
+        parsed_expr = expr_str
+
+    # ✅ Add domain check right here
+    is_domain_safe = visitor.validate_domain(context)
+    visitor.visit(visitor.tree)
+
+
+
+    # Step 4: Get symbolic expression string
+    filtered_terms = [t for t in visitor.terms if t != "0"]
+    
+    # Use raw (evaluable) for eval, pretty only for display
+    evaluable_expr = " + ".join(filtered_terms)
+    symbolic_pretty = DerivativeVisitor.pretty(evaluable_expr)
+
+    print(f"\n📘 Symbolic derivative: {symbolic_pretty}")
+
+
+    # Step 5: Evaluate symbolic derivative at the given point
+    try:
+        #evaluable_expr = " + ".join(filtered_terms)  # raw terms, like '1/(x + y**2)'
+        #result = eval(evaluable_expr, {}, context)
+        safe_globals = {name: getattr(math, name) for name in dir(math) if not name.startswith("__")}
+        print("🧪 Evaluable expression (for eval):", evaluable_expr)
+        result = eval(evaluable_expr, safe_globals, context)
+        print(f"📈 Evaluated at {context}: {result}")
+        #return expr_str, diff_var, context, derivative_str, result  # ⬅️ for Step 2
+        return expr_str, diff_var, context, evaluable_expr, result, is_domain_safe
+    except Exception as e:
+        print(f"❌ Error evaluating: {e}")
+        return None, None, None, None, None
 
             
         
-expr_str = input("Enter a function or expression: ")
-diff_var = input("Differentiate with respect to: ")
+if __name__ == "__main__":
+    print("🎯 STEP 1: Symbolic Derivative + Evaluation")
+    expr_str, diff_var, context, symbolic_expr, symbolic_val, is_domain_safe = evaluate_symbolic_derivative()
 
-if "=" in expr_str:
-    # User entered a full function definition
-    visitor = DerivativeVisitor(expr_str, diff_var)
-    visitor.visit(visitor.tree)
-    pretty_expr = visitor.body
-else:
-    # User entered just an expression
-    tree = ast.parse(expr_str, mode="eval")
-    visitor = DerivativeVisitor(expr_str,diff_var)
-    visitor.visit(tree)
-    pretty_expr = expr_str
+    if expr_str and is_domain_safe:
+        deltas = [0.03, 0.02, 0.01, 0.005, 0.0001]
+        visitor = DerivativeVisitor(expr_str, diff_var)
+        visitor.evaluate_limit_theorem(symbolic_expr, diff_var, context, deltas)
 
-# Shared formatting
-filtered_terms = [t for t in visitor.terms if t != "0"]
-#pretty_terms = [pretty(t) for t in filtered_terms]
-pretty_terms = [DerivativeVisitor.pretty(t) for t in filtered_terms]
-result = " + ".join(pretty_terms) if pretty_terms else "0"
+    elif expr_str:
+        print("⛔ Skipping limit-based approximation due to domain issues.")
+    
 
-print(f"d/d{diff_var} ({DerivativeVisitor.pretty(pretty_expr)}) = {result}")
+
+    
 
 
