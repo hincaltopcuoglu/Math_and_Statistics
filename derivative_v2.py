@@ -1,6 +1,8 @@
 import ast
 import re
 import math
+from tabulate import tabulate
+import operator
 
 class DerivativeVisitor(ast.NodeVisitor):
 
@@ -36,19 +38,52 @@ class DerivativeVisitor(ast.NodeVisitor):
             self.visit(node.left)
             self.visit(node.right)
 
+        #elif isinstance(node.op, ast.Sub):
+        #    self.visit(node.left)
+        #    self.terms.append("NEGATE_NEXT")
+        #    self.visit(node.right)
+
         elif isinstance(node.op, ast.Sub):
-            self.visit(node.left)
-            self.terms.append("NEGATE_NEXT")
-            self.visit(node.right)
-        
+            left_visitor = DerivativeVisitor.__new__(DerivativeVisitor)
+            left_visitor.diff_var = self.diff_var
+            left_visitor.terms = []
+            left_visitor.visit(node.left)
+            left_expr = " + ".join(left_visitor.terms) if left_visitor.terms else "0"
+
+            right_visitor = DerivativeVisitor.__new__(DerivativeVisitor)
+            right_visitor.diff_var = self.diff_var
+            right_visitor.terms = []
+            right_visitor.visit(node.right)
+            right_expr = " + ".join(right_visitor.terms) if right_visitor.terms else "0"
+
+            self.terms.append(f"({left_expr}) - ({right_expr})")
+
+
+        #elif isinstance(node.op, ast.Pow):
+        #    if isinstance(node.left, ast.Name) and isinstance(node.right, ast.Constant):
+        #        var = node.left.id
+        #        exp = node.right.value
+        #        if exp - 1 == 0:
+        #            self.terms.append(f"{exp}")
+        #        else:
+        #            self.terms.append(f"{exp}*{var}**{exp - 1}")
+                #if var == self.diff_var:
+                #    self.terms.append(f"{exp}*{var}**{exp -1}")
+                #else:
+                #    self.terms.append("0")
         elif isinstance(node.op, ast.Pow):
             if isinstance(node.left, ast.Name) and isinstance(node.right, ast.Constant):
                 var = node.left.id
                 exp = node.right.value
                 if var == self.diff_var:
-                    self.terms.append(f"{exp}*{var}**{exp -1}")
+                    if exp - 1 == 0:
+                        self.terms.append(f"{exp}")
+                    else:
+                        self.terms.append(f"{exp}*{var}**{exp - 1}")
                 else:
-                    self.terms.append("0")
+                    self.terms.append("0")  # ← this was missing!
+
+        
 
         elif isinstance(node.op, ast.Div):
             u = ast.unparse(node.left)
@@ -123,6 +158,11 @@ class DerivativeVisitor(ast.NodeVisitor):
             print(f"🧩 Variable {node.id} is not diff target → 0")
             self.terms.append("0")
 
+
+    def visit_Constant(self, node):
+        self.terms.append("0")
+
+
     @staticmethod
     def pretty(term):
         superscripts = {
@@ -151,6 +191,9 @@ class DerivativeVisitor(ast.NodeVisitor):
         # 5. Special simplification: (y*(1) - x*(0))/(y**2) → 1/y
         term = re.sub(r"\((\w+)\*\(1\) - \w+\*\(0\)\)/\(\1\*\*2\)", r"1/\1", term)
 
+        term = re.sub(r'\b[a-zA-Z]\*\*0\b', '1', term)
+        term = re.sub(r'[a-zA-Z]0\b', '', term)  
+
         # 6. Convert **n to superscripts: x**2 → x²
         term = re.sub(r'([a-zA-Z])\s*\*\*\s*(\d+)', 
                   lambda m: m.group(1) + ''.join(superscripts.get(ch, ch) for ch in m.group(2)),
@@ -158,12 +201,10 @@ class DerivativeVisitor(ast.NodeVisitor):
 
         return term
    
-
-
     def visit_Call(self, node):
         func_name = node.func.id
 
-        # Outer function rules
+        # Function rules (chain rule outer derivative)
         rules = {
             'sin': lambda g: f"cos({g})",
             'cos': lambda g: f"-sin({g})",
@@ -177,40 +218,38 @@ class DerivativeVisitor(ast.NodeVisitor):
             'abs': lambda g: f"{g}/abs({g})"
         }
 
+        # 💡 Accept expressions like log(sin(x**2) + 1)
         if len(node.args) != 1:
-            self.terms.append("0")  # Unsupported multi-arg function
+            self.terms.append("0")
             return
 
-        # Get inner expression (g(x))
+        # Inner expression
         inner_node = node.args[0]
         g_expr = ast.unparse(inner_node)
 
-        # Compute g'(x): visit inner node using a fresh visitor
+        # g'(x)
         inner_visitor = DerivativeVisitor.__new__(DerivativeVisitor)
         inner_visitor.diff_var = self.diff_var
         inner_visitor.terms = []
         inner_visitor.visit(inner_node)
         g_prime = " + ".join(inner_visitor.terms) if inner_visitor.terms else "0"
 
-        # Compute f'(g(x))
-        #outer = rules.get(func_name, lambda g: "0")(g_expr)
         if func_name not in rules:
             print(f"⚠️ Unknown function '{func_name}' — treating derivative as 0.")
             self.terms.append("0")
             return
 
-        outer_raw = rules[func_name](g_expr)
-        g_prime_raw = g_prime
-        #outer = self.pretty(outer_raw)
-        #g_prime_pretty = self.pretty(g_prime)
+        outer = rules[func_name](g_expr)
 
-        # Apply chain rule: f'(g(x)) * g'(x)
         if g_prime == "1":
-            self.terms.append(outer_raw)
+            self.terms.append(outer)
         elif g_prime == "0":
             self.terms.append("0")
         else:
-            self.terms.append(f"{outer_raw}*({g_prime_raw})")
+            self.terms.append(f"{outer}*({g_prime})")
+
+
+    
 
     def validate_domain(self, context):
 
@@ -447,6 +486,155 @@ class DerivativeVisitor(ast.NodeVisitor):
 
 
 
+    @staticmethod
+    def evaluate_jacobian():
+    
+        num_funcs = int(input("🔢 Enter number of functions: "))
+
+        func_exprs = []
+        func_names = []
+        variables = []
+
+        for i in range(num_funcs):
+            func_line = input(f"f{i+1}(x₁, x₂, ...) = ")
+            func_exprs.append(func_line)
+
+            # Extract function name and variables from the first one
+            if i == 0:
+                left, _ = func_line.split("=")
+                left = left.strip()
+                args_str = left[left.index("(")+1 : left.index(")")]
+                variables = [arg.strip() for arg in args_str.split(",")]
+
+        # Build Jacobian matrix: list of rows, each is a list of ∂fi/∂xj
+        jacobian = []
+
+        for expr_str in func_exprs:
+            row = []
+            for var in variables:
+                visitor = DerivativeVisitor(expr_str, var)
+                visitor.visit(visitor.tree)
+                terms = [t for t in visitor.terms if t != "0"]
+                pretty_term = DerivativeVisitor.pretty(" + ".join(terms)) if terms else "0"
+                row.append(pretty_term)
+            jacobian.append(row)
+
+        # Build and print table
+        headers = ["∂fᵢ/∂xⱼ →"] + variables
+        table = [[f"f{i+1}"] + row for i, row in enumerate(jacobian)]
+
+        print("\n📐 Jacobian Matrix:")
+        print(tabulate(table, headers=headers, tablefmt="grid"))
+
+    #@staticmethod
+    #def simplify_hessian_expression(expr: str) -> str:
+    #    # Step 1: Remove terms like '*0' or '0*'
+    #    expr = re.sub(r'\b\w+\*0\b', '0', expr)       # e.g., x*0
+    #    expr = re.sub(r'\b0\*\w+\b', '0', expr)       # e.g., 0*x
+
+        # Step 2: Fix things like '2x0' or '6z0' → just '2' or '6'
+    #     expr = re.sub(r'(\d+)[a-zA-Z]0\b', r'\1', expr)  # 2x0 → 2
+    #    expr = re.sub(r'[a-zA-Z]0\b', '', expr)          # x0 → ''
+
+        # Step 3: Evaluate pure constant expressions like '3*2' → '6'
+    #    expr = re.sub(r'\b(\d+)\s*\*\s*(\d+)\b',
+    #                lambda m: str(int(m.group(1)) * int(m.group(2))), expr)
+
+        # Step 4: Remove trivial multiplies with 1
+    #    expr = expr.replace('*1', '')
+    #    expr = expr.replace('1*', '')
+
+        # Step 5: Clean up +0 and 0+
+    #    expr = re.sub(r'\s*\+\s*0\b', '', expr)
+    #    expr = re.sub(r'\b0\s*\+\s*', '', expr)
+
+        # Final clean-up of repeated signs and stray parens
+    #    expr = expr.replace('--', '')
+    #    expr = expr.replace('++', '+')
+    #    expr = re.sub(r'\(+', '(', expr)
+    #    expr = re.sub(r'\)+', ')', expr)
+
+    #    return expr.strip()
+
+
+
+    @staticmethod
+    def simplify_hessian_expression(expr: str) -> str:
+    
+
+        # First basic regex cleanup (keep your existing ones if needed)
+        expr = expr.strip()
+
+        # ✅ Detect and evaluate if the entire expr is numeric-only
+        try:
+            # Parse safely using AST
+            node = ast.parse(expr, mode="eval")
+
+            # Only allow safe arithmetic nodes
+            allowed = (ast.Expression, ast.BinOp, ast.UnaryOp, ast.Num, ast.Constant,
+                    ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow)
+
+            if all(isinstance(n, allowed) for n in ast.walk(node)):
+                result = eval(expr, {"__builtins__": {}})
+                return str(result)
+        except:
+            pass
+
+        return expr
+
+    def visit_UnaryOp(self, node):
+        if isinstance(node.op, ast.USub):  # Unary minus
+            inner = DerivativeVisitor.__new__(DerivativeVisitor)
+            inner.diff_var = self.diff_var
+            inner.terms = []
+            inner.visit(node.operand)
+            expr = " + ".join(inner.terms) if inner.terms else "0"
+            self.terms.append(f"-({expr})")
+        else:
+            self.generic_visit(node)
+
+
+
+    def evaluate_hessian(self, context):
+        print("\n📐 Hessian Matrix Evaluation:")
+
+        variables = self.args
+        hessian = []
+
+        # Prepare safe evaluation
+        safe_globals = {name: getattr(math, name) for name in dir(math) if not name.startswith("__")}
+
+        for var1 in variables:
+            row = []
+            for var2 in variables:
+                # First derivative w.r.t. var2
+                d1 = DerivativeVisitor(f"f({', '.join(variables)}) = {self.body}", var2)
+                d1.visit(d1.tree)
+                first_terms = [t for t in d1.terms if t != "0"]
+                inner_expr = " + ".join(first_terms) if first_terms else "0"
+
+                # Second derivative w.r.t. var1 of the first result
+                d2 = DerivativeVisitor(f"f({', '.join(variables)}) = {inner_expr}", var1)
+                d2.visit(d2.tree)
+                second_terms = [t for t in d2.terms if t != "0"]
+                raw_expr = " + ".join(second_terms) if second_terms else "0"
+
+                try:
+                    # Evaluate numerically using the same context used earlier
+                    value = eval(raw_expr, safe_globals, context)
+                    row.append(round(value, 6))  # Rounded for nice display
+                except Exception:
+                    row.append("❌")
+            hessian.append(row)
+
+        headers = ["∂²f/∂xi∂xj →"] + variables
+        table = [[v] + row for v, row in zip(variables, hessian)]
+        print(tabulate(table, headers=headers, tablefmt="grid"))
+
+
+
+    
+
 
 
     
@@ -515,6 +703,7 @@ if __name__ == "__main__":
         #visitor.evaluate_both_differences(symbolic_val, diff_var, context, deltas)
         visitor.evaluate_gradient(context)
         visitor.evaluate_full_gradient_with_comparison(context, deltas)
+        visitor.evaluate_hessian(context)
 
 
     elif expr_str:
