@@ -588,8 +588,45 @@ class DerivativeVisitor(ast.NodeVisitor):
 
 
 
-    
+    def evaluate_laplacian(self, context):
+        print("\n📐 Laplacian Evaluation:")
 
+        variables = self.args
+        second_derivatives = []
+
+        safe_globals = {name: getattr(math, name) for name in dir(math) if not name.startswith("__")}
+
+        total = 0.0
+
+        for var in variables:
+            # First derivative
+            d1 = DerivativeVisitor(f"f({', '.join(variables)}) = {self.body}", var)
+            d1.visit(d1.tree)
+            first_terms = [t for t in d1.terms if t != "0"]
+            first_expr = " + ".join(first_terms) if first_terms else "0"
+
+            # Second derivative
+            d2 = DerivativeVisitor(f"f({', '.join(variables)}) = {first_expr}", var)
+            d2.visit(d2.tree)
+            second_terms = [t for t in d2.terms if t != "0"]
+            second_expr = " + ".join(second_terms) if second_terms else "0"
+
+            # Pretty + evaluate
+            symbolic_pretty = self.pretty(second_expr)
+            print(f"∂²f/∂{var}² = {symbolic_pretty}")
+
+            try:
+                val = eval(second_expr, safe_globals, context)
+                print(f"  → Evaluated at {var}={context[var]}: {val}\n")
+                second_derivatives.append(val)
+                total += val
+            except Exception as e:
+                print(f"  ❌ Error evaluating: {e}")
+                second_derivatives.append(None)
+
+        print(f"🔄 Laplacian (∇²f): {total}")
+
+    
 
 
     
@@ -650,7 +687,7 @@ def evaluate_symbolic_derivative():
         
 if __name__ == "__main__":
     print("📌 Choose what you want to calculate:")
-    print("1. Derivative / Gradient / Hessian / Limit Comparisons")
+    print("1. Derivative / Gradient / Hessian / Limit Comparisons / Laplace")
     print("2. Jacobian Matrix")
 
     choice = input("Enter 1 or 2: ").strip()
@@ -669,8 +706,9 @@ if __name__ == "__main__":
                 print("2. Compute Gradient")
                 print("3. Compare Gradient with Numerical Derivatives")
                 print("4. Compute Hessian Matrix")
-                print("5. Exit")
-                sub_choice = input("Your choice (1-5): ").strip()
+                print("5. Compute Laplacian")
+                print("6. Exit")
+                sub_choice = input("Your choice (1-6): ").strip()
 
                 if sub_choice == "1":
                     visitor.evaluate_both_differences(symbolic_val, diff_var, context, deltas)
@@ -681,6 +719,8 @@ if __name__ == "__main__":
                 elif sub_choice == "4":
                     visitor.evaluate_hessian(context)
                 elif sub_choice == "5":
+                    visitor.evaluate_laplacian(context)
+                elif sub_choice == "6":
                     break
                 else:
                     print("⚠️ Invalid selection.")
