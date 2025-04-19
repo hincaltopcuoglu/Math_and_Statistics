@@ -339,68 +339,124 @@ class DerivativeVisitor(ast.NodeVisitor):
                 print(f"{delta:10.6f} | ❌ Error: {e}")
 
 
+    def evaluate_both_differences(self, symbolic_value, var, context, deltas):
+
+        safe_globals = {name: getattr(math, name) for name in dir(math) if not name.startswith("__")}
+
+        print("\n📐 Derivative Approximations")
+        print(f"Variable: {var}, Point: {context[var]}")
+        print(f"True (Symbolic): {symbolic_value:.10f}\n")
+
+        print(f"{'Δ':>10} | {'Forward Diff':>16} | {'Central Diff':>16}")
+        print("-" * 47)
+
+        for delta in sorted(deltas, reverse=True):
+            try:
+                ctx_plus = context.copy()
+                ctx_minus = context.copy()
+
+                ctx_plus[var] += delta
+                ctx_minus[var] -= delta
+
+                f_plus = eval(self.body, safe_globals, ctx_plus)
+                f_base = eval(self.body, safe_globals, context)
+                f_minus = eval(self.body, safe_globals, ctx_minus)
+
+                forward = (f_plus - f_base) / delta
+                central = (f_plus - f_minus) / (2 * delta)
+
+                print(f"{delta:10.6f} | {forward:16.10f} | {central:16.10f}")
+
+            except Exception as e:
+                print(f"{delta:10.6f} | ❌ Error: {e}")
+
+
+    def evaluate_gradient(self, context):
+        print("\n📐 Gradient Evaluation:")
+
+        # Extract all variable names from the context
+        vars_to_diff = list(context.keys())
+        gradient_vector = []
+
+        for var in vars_to_diff:
+            partial = DerivativeVisitor(f"f({', '.join(vars_to_diff)}) = {self.body}", var)
+            partial.visit(partial.tree)
+
+            filtered_terms = [t for t in partial.terms if t != "0"]
+            symbolic_expr = " + ".join(filtered_terms)
+            symbolic_pretty = self.pretty(symbolic_expr)
+
+            print(f"∂f/∂{var} = {symbolic_pretty}")
+
+            # Evaluate this partial derivative
+        
+            safe_globals = {name: getattr(math, name) for name in dir(math) if not name.startswith("__")}
+            try:
+                val = eval(symbolic_expr, safe_globals, context)
+                print(f"  → Evaluated at {context}: {val}")
+                gradient_vector.append(val)
+            except Exception as e:
+                print(f"  ❌ Error evaluating ∂f/∂{var}: {e}")
+                gradient_vector.append(None)
+
+        print(f"\n🔼 Gradient vector: {gradient_vector}")
+
+
 
 
     
 def evaluate_symbolic_derivative():
+
     # Step 1: get user inputs
     expr_str = input("Enter a function: ")  # e.g., f(x, y) = x*y + log(x + y**2)
     diff_var = input("Differentiate with respect to: ")  # e.g., x
 
     # Step 2: Ask for evaluation point
     raw_input = input("Enter values for variables (e.g. x=2, y=3): ")
-    #context = dict(eval(item.strip()) for item in raw_input.split(","))  # {'x': 2, 'y': 3}
 
     context = {}
     for item in raw_input.split(","):
         key, value = item.strip().split("=")
         context[key.strip()] = eval(value.strip())
 
-
     # Step 3: Symbolic differentiation
-    #visitor = DerivativeVisitor(expr_str, diff_var)
-
-    # Try to detect missing function header
     if "=" in expr_str:
         visitor = DerivativeVisitor(expr_str, diff_var)
         parsed_expr = visitor.body
     else:
-        # 🧠 Automatically extract variable names
         vars_found = sorted(set(re.findall(r'\b[a-zA-Z]\w*\b', expr_str)))
         arglist = ", ".join(vars_found)
         full_func = f"f({arglist}) = {expr_str}"
         visitor = DerivativeVisitor(full_func, diff_var)
         parsed_expr = expr_str
 
-    # ✅ Add domain check right here
+    # ✅ Ask for missing variables if needed
+    for var in visitor.args:
+        if var not in context:
+            val = input(f"🧠 Enter value for missing variable '{var}': ")
+            context[var] = eval(val)
+
+    # ✅ Add domain check
     is_domain_safe = visitor.validate_domain(context)
     visitor.visit(visitor.tree)
 
-
-
     # Step 4: Get symbolic expression string
     filtered_terms = [t for t in visitor.terms if t != "0"]
-    
-    # Use raw (evaluable) for eval, pretty only for display
     evaluable_expr = " + ".join(filtered_terms)
     symbolic_pretty = DerivativeVisitor.pretty(evaluable_expr)
-
     print(f"\n📘 Symbolic derivative: {symbolic_pretty}")
-
 
     # Step 5: Evaluate symbolic derivative at the given point
     try:
-        #evaluable_expr = " + ".join(filtered_terms)  # raw terms, like '1/(x + y**2)'
-        #result = eval(evaluable_expr, {}, context)
         safe_globals = {name: getattr(math, name) for name in dir(math) if not name.startswith("__")}
         print("🧪 Evaluable expression (for eval):", evaluable_expr)
         result = eval(evaluable_expr, safe_globals, context)
         print(f"📈 Evaluated at {context}: {result}")
-        #return expr_str, diff_var, context, derivative_str, result  # ⬅️ for Step 2
         return expr_str, diff_var, context, evaluable_expr, result, is_domain_safe
     except Exception as e:
         print(f"❌ Error evaluating: {e}")
-        return None, None, None, None, None
+        return None, None, None, None, None, False
+
 
             
         
@@ -411,12 +467,10 @@ if __name__ == "__main__":
     if expr_str and is_domain_safe:
         deltas = [0.03, 0.02, 0.01, 0.005, 0.0001]
         visitor = DerivativeVisitor(expr_str, diff_var)
-        # forward difference
-        visitor.evaluate_limit_theorem(symbolic_expr, diff_var, context, deltas)
+        visitor.evaluate_both_differences(symbolic_val, diff_var, context, deltas)
+        visitor.evaluate_gradient(context)
 
-        # central difference
-        visitor.evaluate_central_difference(diff_var, context, deltas)
-        
+
     elif expr_str:
         print("⛔ Skipping limit-based approximation due to domain issues.")
     
