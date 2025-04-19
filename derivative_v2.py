@@ -694,23 +694,46 @@ def evaluate_symbolic_derivative():
             
         
 if __name__ == "__main__":
-    print("🎯 STEP 1: Symbolic Derivative + Evaluation")
-    expr_str, diff_var, context, symbolic_expr, symbolic_val, is_domain_safe = evaluate_symbolic_derivative()
+    print("📌 Choose what you want to calculate:")
+    print("1. Derivative / Gradient / Hessian / Limit Comparisons")
+    print("2. Jacobian Matrix")
 
-    if expr_str and is_domain_safe:
-        deltas = [0.03, 0.02, 0.01, 0.005, 0.0001]
-        visitor = DerivativeVisitor(expr_str, diff_var)
-        #visitor.evaluate_both_differences(symbolic_val, diff_var, context, deltas)
-        visitor.evaluate_gradient(context)
-        visitor.evaluate_full_gradient_with_comparison(context, deltas)
-        visitor.evaluate_hessian(context)
+    choice = input("Enter 1 or 2: ").strip()
 
+    if choice == "1":
+        print("\n🎯 STEP 1: Symbolic Derivative + Evaluation")
+        expr_str, diff_var, context, symbolic_expr, symbolic_val, is_domain_safe = evaluate_symbolic_derivative()
 
-    elif expr_str:
-        print("⛔ Skipping limit-based approximation due to domain issues.")
-    
+        if expr_str and is_domain_safe:
+            deltas = [0.03, 0.02, 0.01, 0.005, 0.0001]
+            visitor = DerivativeVisitor(expr_str, diff_var)
 
+            while True:
+                print("\n🧪 Select an operation to perform:")
+                print("1. Compare Derivative Approximations (Limit-based)")
+                print("2. Compute Gradient")
+                print("3. Compare Gradient with Numerical Derivatives")
+                print("4. Compute Hessian Matrix")
+                print("5. Exit")
+                sub_choice = input("Your choice (1-5): ").strip()
 
-    
+                if sub_choice == "1":
+                    visitor.evaluate_both_differences(symbolic_val, diff_var, context, deltas)
+                elif sub_choice == "2":
+                    visitor.evaluate_gradient(context)
+                elif sub_choice == "3":
+                    visitor.evaluate_full_gradient_with_comparison(context, deltas)
+                elif sub_choice == "4":
+                    visitor.evaluate_hessian(context)
+                elif sub_choice == "5":
+                    break
+                else:
+                    print("⚠️ Invalid selection.")
 
+        elif expr_str:
+            print("⛔ Skipping derivative-related operations due to domain issues.")
 
+    elif choice == "2":
+        DerivativeVisitor.evaluate_jacobian()
+    else:
+        print("⚠️ Invalid choice. Program terminated.")
