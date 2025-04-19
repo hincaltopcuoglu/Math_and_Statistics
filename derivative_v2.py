@@ -7,7 +7,8 @@ from itertools import combinations_with_replacement
 
 class DerivativeVisitor(ast.NodeVisitor):
 
-    def __init__(self, func_str, diff_var):
+    def __init__(self, func_str, diff_var, chain_expand=False):
+        self.chain_expand = chain_expand
         self.diff_var = diff_var
         self.terms = []
 
@@ -188,50 +189,61 @@ class DerivativeVisitor(ast.NodeVisitor):
    
     def visit_Call(self, node):
         func_name = node.func.id
-
-        # Function rules (chain rule outer derivative)
-        rules = {
-            'sin': lambda g: f"cos({g})",
-            'cos': lambda g: f"-sin({g})",
-            'tan': lambda g: f"1/cos({g})**2",
-            'log': lambda g: f"1/({g})",
-            'exp': lambda g: f"exp({g})",
-            'sqrt': lambda g: f"1/(2*sqrt({g}))",
-            'sec': lambda g: f"sec({g})*tan({g})",
-            'csc': lambda g: f"-csc({g})*cot({g})",
-            'cot': lambda g: f"-1/sin({g})**2",
-            'abs': lambda g: f"{g}/abs({g})"
-        }
-
-        # 💡 Accept expressions like log(sin(x**2) + 1)
         if len(node.args) != 1:
             self.terms.append("0")
             return
 
-        # Inner expression
-        inner_node = node.args[0]
-        g_expr = ast.unparse(inner_node)
+        g_node = node.args[0]
+        g_expr = ast.unparse(g_node)
 
-        # g'(x)
-        inner_visitor = DerivativeVisitor.__new__(DerivativeVisitor)
-        inner_visitor.diff_var = self.diff_var
-        inner_visitor.terms = []
-        inner_visitor.visit(inner_node)
-        g_prime = " + ".join(inner_visitor.terms) if inner_visitor.terms else "0"
+        # Recursively get derivative of inner expression g(x)
+        #g_prime_visitor = DerivativeVisitor.__init__(g_prime_visitor, f"f({', '.join(self.args)}) = {g_expr}", self.diff_var, self.chain_expand)
+        #g_prime_visitor = DerivativeVisitor(f"f({', '.join(self.args)}) = {g_expr}", self.diff_var, chain_expand=self.chain_expand)
+        g_prime_visitor = DerivativeVisitor(f"f({', '.join(self.args)}) = {g_expr}", self.diff_var, chain_expand=self.chain_expand)
 
-        if func_name not in rules:
+
+        #g_prime_visitor.diff_var = self.diff_var
+        #g_prime_visitor.terms = []
+        #g_prime_visitor.chain_expand = self.chain_expand
+        #g_prime_visitor.args = self.args
+        #g_prime_visitor.body = g_expr
+        #g_prime_visitor.tree = ast.parse(g_expr, mode="eval")
+        g_prime_visitor.visit(g_prime_visitor.tree)
+        g_prime_expr = " + ".join(g_prime_visitor.terms)
+
+        chain_rules = {
+            'sin': lambda g: f"cos({g})",
+            'cos': lambda g: f"-sin({g})",
+            'log': lambda g: f"1/({g})",
+            'exp': lambda g: f"exp({g})"
+        }
+
+        if func_name not in chain_rules:
             print(f"⚠️ Unknown function '{func_name}' — treating derivative as 0.")
             self.terms.append("0")
             return
 
-        outer = rules[func_name](g_expr)
+        outer_prime = chain_rules[func_name](g_expr)
 
-        if g_prime == "1":
-            self.terms.append(outer)
-        elif g_prime == "0":
-            self.terms.append("0")
+        if self.chain_expand:
+            self.terms.append(f"({outer_prime}) * ({g_prime_expr})")
         else:
-            self.terms.append(f"{outer}*({g_prime})")
+            if g_prime_expr == "1":
+                self.terms.append(outer_prime)
+            elif g_prime_expr == "0":
+                self.terms.append("0")
+            else:
+                self.terms.append(f"{outer_prime} * ({g_prime_expr})")
+
+    def symbolic_chain_expand(self):
+        print("\n🔗 Symbolic Chain Rule Expansion:")
+        for var in self.args:
+            expanded = DerivativeVisitor(f"f({', '.join(self.args)}) = {self.body}", var, chain_expand=True)
+            expanded.visit(expanded.tree)
+            expr = " + ".join(expanded.terms)
+            print(f"∂f/∂{var} = {expr}")
+
+       
 
 
     
@@ -714,6 +726,8 @@ class DerivativeVisitor(ast.NodeVisitor):
         print(f"📈 Directional Derivative = ∇f ⋅ v̂ = {directional_deriv:.10f}")
 
 
+
+
     
 def evaluate_symbolic_derivative():
 
@@ -772,7 +786,7 @@ def evaluate_symbolic_derivative():
         
 if __name__ == "__main__":
     print("📌 Choose what you want to calculate:")
-    print("1. Derivative / Gradient / Hessian / Limit Comparisons / Laplace / Taylor Series / Directional Derivative")
+    print("1. Derivative / Gradient / Hessian / Limit Comparisons / Laplace / Taylor Series / Directional Derivative / Symbolic Chain Rule Expansion")
     print("2. Jacobian Matrix")
 
     choice = input("Enter 1 or 2: ").strip()
@@ -794,8 +808,9 @@ if __name__ == "__main__":
                 print("5. Compute Laplacian")
                 print("6. Taylor Series")
                 print("7. Compute Directional Derivative")
-                print("8. Exit")
-                sub_choice = input("Your choice (1-8): ").strip()
+                print("8. Symbolic Chain Rule Expansion")
+                print("9. Exit")
+                sub_choice = input("Your choice (1-9): ").strip()
 
                 if sub_choice == "1":
                     visitor.evaluate_both_differences(symbolic_val, diff_var, context, deltas)
@@ -812,6 +827,8 @@ if __name__ == "__main__":
                 elif sub_choice == "7":
                     visitor.evaluate_directional_derivative(context)
                 elif sub_choice == "8":
+                    visitor.symbolic_chain_expand()
+                elif sub_choice == "9":
                     break
                 else:
                     print("⚠️ Invalid selection.")
