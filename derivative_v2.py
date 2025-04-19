@@ -673,6 +673,47 @@ class DerivativeVisitor(ast.NodeVisitor):
     
 
 
+    def evaluate_directional_derivative(self, context):
+        print("\n📐 Directional Derivative Evaluation:")
+
+        variables = self.args
+        print(f"Variables: {variables}")
+        raw_dir = input(f"Enter direction vector as comma-separated values (e.g., 1,2,...): ")
+        direction = [float(x.strip()) for x in raw_dir.split(",")]
+
+        if len(direction) != len(variables):
+            print("❌ Direction vector length must match number of variables.")
+            return
+
+        # Normalize the direction vector
+        norm = math.sqrt(sum(x**2 for x in direction))
+        if norm == 0:
+            print("❌ Direction vector cannot be zero.")
+            return
+        direction_unit = [x / norm for x in direction]
+        print(f"🔄 Normalized direction vector: {direction_unit}")
+
+        # Compute gradient
+        gradient_vector = []
+        for var in variables:
+            partial = DerivativeVisitor(f"f({', '.join(variables)}) = {self.body}", var)
+            partial.visit(partial.tree)
+            filtered_terms = [t for t in partial.terms if t != "0"]
+            symbolic_expr = " + ".join(filtered_terms) if filtered_terms else "0"
+            try:
+                val = eval(symbolic_expr, {**math.__dict__}, context)
+                gradient_vector.append(val)
+            except Exception as e:
+                print(f"❌ Error evaluating ∂f/∂{var}: {e}")
+                return
+
+        print(f"🧮 Gradient at {context}: {gradient_vector}")
+
+        # Compute dot product
+        directional_deriv = sum(g * v for g, v in zip(gradient_vector, direction_unit))
+        print(f"📈 Directional Derivative = ∇f ⋅ v̂ = {directional_deriv:.10f}")
+
+
     
 def evaluate_symbolic_derivative():
 
@@ -731,7 +772,7 @@ def evaluate_symbolic_derivative():
         
 if __name__ == "__main__":
     print("📌 Choose what you want to calculate:")
-    print("1. Derivative / Gradient / Hessian / Limit Comparisons / Laplace / Taylor Series")
+    print("1. Derivative / Gradient / Hessian / Limit Comparisons / Laplace / Taylor Series / Directional Derivative")
     print("2. Jacobian Matrix")
 
     choice = input("Enter 1 or 2: ").strip()
@@ -752,8 +793,9 @@ if __name__ == "__main__":
                 print("4. Compute Hessian Matrix")
                 print("5. Compute Laplacian")
                 print("6. Taylor Series")
-                print("7. Exit")
-                sub_choice = input("Your choice (1-7): ").strip()
+                print("7. Compute Directional Derivative")
+                print("8. Exit")
+                sub_choice = input("Your choice (1-8): ").strip()
 
                 if sub_choice == "1":
                     visitor.evaluate_both_differences(symbolic_val, diff_var, context, deltas)
@@ -768,6 +810,8 @@ if __name__ == "__main__":
                 elif sub_choice == "6":
                     visitor.evaluate_taylor_expansion(context,order=2)
                 elif sub_choice == "7":
+                    visitor.evaluate_directional_derivative(context)
+                elif sub_choice == "8":
                     break
                 else:
                     print("⚠️ Invalid selection.")
