@@ -38,10 +38,6 @@ class DerivativeVisitor(ast.NodeVisitor):
             self.visit(node.left)
             self.visit(node.right)
 
-        #elif isinstance(node.op, ast.Sub):
-        #    self.visit(node.left)
-        #    self.terms.append("NEGATE_NEXT")
-        #    self.visit(node.right)
 
         elif isinstance(node.op, ast.Sub):
             left_visitor = DerivativeVisitor.__new__(DerivativeVisitor)
@@ -59,18 +55,6 @@ class DerivativeVisitor(ast.NodeVisitor):
             self.terms.append(f"({left_expr}) - ({right_expr})")
 
 
-        #elif isinstance(node.op, ast.Pow):
-        #    if isinstance(node.left, ast.Name) and isinstance(node.right, ast.Constant):
-        #        var = node.left.id
-        #        exp = node.right.value
-        #        if exp - 1 == 0:
-        #            self.terms.append(f"{exp}")
-        #        else:
-        #            self.terms.append(f"{exp}*{var}**{exp - 1}")
-                #if var == self.diff_var:
-                #    self.terms.append(f"{exp}*{var}**{exp -1}")
-                #else:
-                #    self.terms.append("0")
         elif isinstance(node.op, ast.Pow):
             if isinstance(node.left, ast.Name) and isinstance(node.right, ast.Constant):
                 var = node.left.id
@@ -422,7 +406,7 @@ class DerivativeVisitor(ast.NodeVisitor):
             partial.visit(partial.tree)
 
             filtered_terms = [t for t in partial.terms if t != "0"]
-            symbolic_expr = " + ".join(filtered_terms)
+            symbolic_expr = " + ".join(filtered_terms) if filtered_terms else "0"
             symbolic_pretty = self.pretty(symbolic_expr)
 
             print(f"∂f/∂{var} = {symbolic_pretty}")
@@ -526,35 +510,6 @@ class DerivativeVisitor(ast.NodeVisitor):
         print("\n📐 Jacobian Matrix:")
         print(tabulate(table, headers=headers, tablefmt="grid"))
 
-    #@staticmethod
-    #def simplify_hessian_expression(expr: str) -> str:
-    #    # Step 1: Remove terms like '*0' or '0*'
-    #    expr = re.sub(r'\b\w+\*0\b', '0', expr)       # e.g., x*0
-    #    expr = re.sub(r'\b0\*\w+\b', '0', expr)       # e.g., 0*x
-
-        # Step 2: Fix things like '2x0' or '6z0' → just '2' or '6'
-    #     expr = re.sub(r'(\d+)[a-zA-Z]0\b', r'\1', expr)  # 2x0 → 2
-    #    expr = re.sub(r'[a-zA-Z]0\b', '', expr)          # x0 → ''
-
-        # Step 3: Evaluate pure constant expressions like '3*2' → '6'
-    #    expr = re.sub(r'\b(\d+)\s*\*\s*(\d+)\b',
-    #                lambda m: str(int(m.group(1)) * int(m.group(2))), expr)
-
-        # Step 4: Remove trivial multiplies with 1
-    #    expr = expr.replace('*1', '')
-    #    expr = expr.replace('1*', '')
-
-        # Step 5: Clean up +0 and 0+
-    #    expr = re.sub(r'\s*\+\s*0\b', '', expr)
-    #    expr = re.sub(r'\b0\s*\+\s*', '', expr)
-
-        # Final clean-up of repeated signs and stray parens
-    #    expr = expr.replace('--', '')
-    #    expr = expr.replace('++', '+')
-    #    expr = re.sub(r'\(+', '(', expr)
-    #    expr = re.sub(r'\)+', ')', expr)
-
-    #    return expr.strip()
 
 
 
