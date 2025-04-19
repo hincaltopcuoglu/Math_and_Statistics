@@ -402,6 +402,51 @@ class DerivativeVisitor(ast.NodeVisitor):
         print(f"\n🔼 Gradient vector: {gradient_vector}")
 
 
+    def evaluate_full_gradient_with_comparison(self, context, deltas):
+
+        safe_globals = {name: getattr(math, name) for name in dir(math) if not name.startswith("__")}
+
+        print("\n📐 Gradient Components with Numerical Comparison")
+
+        for var in self.args:
+            # Symbolic derivative for this variable
+            partial = DerivativeVisitor(f"f({', '.join(self.args)}) = {self.body}", var)
+            partial.visit(partial.tree)
+
+            filtered_terms = [t for t in partial.terms if t != "0"]
+            symbolic_expr = " + ".join(filtered_terms)
+            try:
+                true_val = eval(symbolic_expr, safe_globals, context)
+            except Exception as e:
+                print(f"\n∂f/∂{var} - ❌ Error evaluating symbolic: {e}")
+                continue
+
+            print(f"\nGradient component ∂f/∂{var}:")
+            print(f"True (Symbolic) = {true_val:.10f}\n")
+            print(f"{'Δ':>10} | {'Forward Diff':>16} | {'Central Diff':>16}")
+            print("-" * 47)
+
+            for delta in sorted(deltas, reverse=True):
+                try:
+                    ctx_plus = context.copy()
+                    ctx_minus = context.copy()
+
+                    ctx_plus[var] += delta
+                    ctx_minus[var] -= delta
+
+                    f_plus = eval(self.body, safe_globals, ctx_plus)
+                    f_base = eval(self.body, safe_globals, context)
+                    f_minus = eval(self.body, safe_globals, ctx_minus)
+
+                    forward = (f_plus - f_base) / delta
+                    central = (f_plus - f_minus) / (2 * delta)
+
+                    print(f"{delta:10.6f} | {forward:16.10f} | {central:16.10f}")
+                except Exception as e:
+                    print(f"{delta:10.6f} | ❌ Error: {e}")
+
+
+
 
 
     
@@ -467,8 +512,9 @@ if __name__ == "__main__":
     if expr_str and is_domain_safe:
         deltas = [0.03, 0.02, 0.01, 0.005, 0.0001]
         visitor = DerivativeVisitor(expr_str, diff_var)
-        visitor.evaluate_both_differences(symbolic_val, diff_var, context, deltas)
+        #visitor.evaluate_both_differences(symbolic_val, diff_var, context, deltas)
         visitor.evaluate_gradient(context)
+        visitor.evaluate_full_gradient_with_comparison(context, deltas)
 
 
     elif expr_str:
