@@ -200,9 +200,34 @@ def intersect(a,b):
         return sorted(intersect_ab) == sorted(intersect_ba)
 
 
-print(intersect(a=[1,2,3,4],b=[1,2,3,4,5,9]))
-print(intersect(a=[1,2,3,4],b=[5,6,7,8,9]))
+#print(intersect(a=[1,2,3,4],b=[1,2,3,4,5,9]))
+#print(intersect(a=[1,2,3,4],b=[5,6,7,8,9]))
 
 
 ###########################################################################
 
+"""
+Associative Property. For every three events A, B, and C, the following associative
+relations are satisfied:
+A ∩ B ∩ C = (A ∩ B) ∩ C = A ∩ (B ∩ C)
+
+Problem 9: Prove this theorem
+"""
+
+def intersect_assc(a,b,c):
+    a_int_b = list(set(a) & set(b))
+    b_int_c = list(set(b) & set(c))
+    a_int_c = list(set(a) & set(c))
+    ab_int_c = list(set(a_int_b) & set(c))
+    a_int_bc = list(set(a) & set(b_int_c)) 
+    b_int_ac = list(set(b) & set(a_int_c))
+    direct = list(set(a) & set(b) & set(c))
+
+    return ab_int_c == a_int_bc == b_int_ac == direct, direct
+
+
+
+#print(intersect_assc(a=[1,2,3,4,5],b=[1,2],c=[1,2,3,4,5,6,7,8,9]))
+
+
+###########################################################################
