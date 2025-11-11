@@ -1,5 +1,7 @@
 """
-Problem 1:
+Definition 1.4.1
+
+Example 1.4.1:
 Rolling a Die. When a six-sided die is rolled, 
 the sample space can be regarded as
 containing the six numbers 1, 2, 3, 4, 5, 6, 
@@ -36,6 +38,8 @@ def find_greater(s:list, target:int)->list:
 ###########################################################################
 
 """
+Definition 1.4.2
+
 Containment:
 It is said that a set A is contained in another set B if every element
 of the set A also belongs to the set B. 
@@ -66,6 +70,8 @@ def is_containment(a,b)->bool:
 
 
 """
+Theorem 1.4.1
+
 Let A, B, and C be events. Then A ⊂ S. If A ⊂ B and B ⊂ A, then A = B. If A ⊂ B
 and B ⊂ C, then A ⊂ C
 
@@ -93,6 +99,8 @@ def proof_containments(a,b,c):
 ###########################################################################
 
 """
+Definition 1.4.5
+
 Complement. The complement of a set A is defined to be the set that contains all
 elements of the sample space S that do not belong to A. The notation for the
 complement of A is A_c
@@ -111,8 +119,9 @@ def is_complement(a,s):
 ###########################################################################
 
 """
-Problem 5:
+Theorem 1.4.3
 
+Problem 5:
 Proof that Let A be an event. Then(A_c)_c = A -> complement of complement
 
 """
@@ -130,6 +139,8 @@ def comp_of_comp(a,s):
 
 
 """
+Definition 1.4.6
+
 Union of Two Sets. If A and B are any two sets, the union of A and B is defined to be
 the set containing all outcomes that belong to A alone, to B alone, or to both A and
 B. The notation for the union of A and B is A ∪ B
@@ -158,6 +169,8 @@ def proof_union_v2(l1,l2)->list:
 ###########################################################################
 
 """
+Theorem 1.4.6
+
 Associative Property. For every three events A, B, and C, the following associative
 relations are satisfied:
 A ∪ B ∪ C = (A ∪ B) ∪ C = A ∪ (B ∪ C)
@@ -183,6 +196,8 @@ def associative(a,b,c):
 
 
 """
+Definition 1.4.8
+
 Intersection of Two Sets. If A and B are any two sets, the intersection of A and B is
 defined to be the set that contains all outcomes that belong both to A and to B. The
 notation for the intersection of A and B is A ∩ B.
@@ -207,6 +222,8 @@ def intersect(a,b):
 ###########################################################################
 
 """
+Theorem 1.4.8
+
 Associative Property. For every three events A, B, and C, the following associative
 relations are satisfied:
 A ∩ B ∩ C = (A ∩ B) ∩ C = A ∩ (B ∩ C)
