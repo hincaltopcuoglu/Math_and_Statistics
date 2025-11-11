@@ -179,3 +179,30 @@ def associative(a,b,c):
 #print(associative(a=[7,9],b=[1,2],c=[4,5,6,7,8]))
 
 ###########################################################################
+
+
+
+"""
+Intersection of Two Sets. If A and B are any two sets, the intersection of A and B is
+defined to be the set that contains all outcomes that belong both to A and to B. The
+notation for the intersection of A and B is A ∩ B.
+
+Problem 8: Prove that definition
+
+"""
+
+def intersect(a,b):
+
+    intersect_ab = [elem for elem in a if elem in b]
+    intersect_ba = [elem for elem in b if elem in a]
+    
+    if intersect_ab:
+        return sorted(intersect_ab) == sorted(intersect_ba)
+
+
+print(intersect(a=[1,2,3,4],b=[1,2,3,4,5,9]))
+print(intersect(a=[1,2,3,4],b=[5,6,7,8,9]))
+
+
+###########################################################################
+
